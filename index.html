@@ -1,0 +1,397 @@
+<div id="schedule-container">
+ <h2 id="schedule-heading" class="font-monospace text-white">Today's Schedule</h2>
+  <div id="schedule-table" class="scroll-container">
+    <div id="1">
+      <!-- <h1>In Now</h1> -->
+      <div width="100%" id="inNow"></div>
+      <div id="currentTime"></div>
+    </div>
+    <div width="100%" class="divide"></div>
+    <div>
+      <!-- <h1>In Later</h1> -->
+      <div width="100%" id="inLater"></div>
+    </div>
+    <div width="100%" class="divide"></div>
+    <div>
+      <!-- <h1>In Next Business Day</h1> -->
+      <div width="100%" id="inTomorrow"></div>
+    </div>
+  </div>
+</div>
+<style type="text/css">
+  .text-white {
+    color: white !important;
+  }
+  rect:hover {
+    fill: #223F51 !important;
+  }
+  .divide {
+    height: 2px;
+    background-color: #d9d9d9;
+  }
+  h1, #inTomorrow {
+    font-family: sans-serif;
+  }
+  #inTomorrow {
+    font-size: 17px;
+  }
+  #currentTime {
+    width: 3px;
+    background-color: red;
+    position: relative;
+   /* top: -276.390625px;*/
+  }
+  .axis path,
+  .axis line {
+    fill: none;
+    stroke: grey;
+    shape-rendering: crispEdges;
+  }
+  .axis text {
+    font-family: sans-serif;
+    font-size: 10px;
+  }
+  .timeline-label {
+    font-family: sans-serif;
+    font-size: 17px;
+  }
+  #timeline2 .axis {
+    transform: translate(0px,40px);
+    -ms-transform: translate(0px,40px); /* IE 9 */
+    -webkit-transform: translate(0px,40px); /* Safari and Chrome */
+    -o-transform: translate(0px,40px); /* Opera */
+    -moz-transform: translate(0px,40px); /* Firefox */
+  }
+  .coloredDiv {
+    height:20px; width:20px; float:left;
+  }
+  #schedule-table {
+    padding: 10px;    
+    overflow-y: auto;
+    overflow-x: hidden;
+    height: 300px;
+  }
+  #schedule-container {
+    height: 400px;    
+    color: #333333;
+  }
+  #schedule-container h2 {
+    color: #223F51;
+  }
+  #schedule-heading {
+    background-color: #223F51;
+    padding: 10px 10px 10px 30px;
+  }
+  .font-monospace, #date, #message, #user {
+    font-family: open sans !important;
+  }
+</style>
+<script src="http://code.jquery.com/jquery-latest.min.js"></script>
+<script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+<script src="https://d3js.org/d3-time.v1.min.js"></script>
+<script src="https://d3js.org/d3-time-format.v2.min.js"></script>
+<script src="https://d3js.org/d3-array.v1.min.js"></script>
+<script src="https://d3js.org/d3-collection.v1.min.js"></script>
+<script src="https://d3js.org/d3-color.v1.min.js"></script>
+<script src="https://d3js.org/d3-format.v1.min.js"></script>
+<script src="https://d3js.org/d3-interpolate.v1.min.js"></script>
+<script src="https://d3js.org/d3-time.v1.min.js"></script>
+<script src="https://d3js.org/d3-time-format.v2.min.js"></script>
+<script src="https://d3js.org/d3-scale.v1.min.js"></script>
+<script src="d3-timeline-desktop.js"></script>
+<script type="text/javascript">
+
+(function(){
+  'use strict';
+
+  var inNowDataSet = [];
+  var inLaterDataSet = [];
+  var inTomorrowDataSet = [];
+  var inTomorrowEmployees = [];
+  var today = new Date();                   //*
+  var current_timestamp = today.getTime();  //*
+
+  function formatTime(timestamp) {
+    var formatTime = d3.timeFormat('%H:%M %p');
+    return formatTime(timestamp);
+  }  
+
+  function checkTime(timestamp) {
+    var formatTime = d3.timeFormat('%I %p');
+    return formatTime(timestamp);
+  }  
+
+  function toUnix(time) {
+    var day = today.getDate();
+    var month = today.getMonth()+1;
+    var year = today.getFullYear();
+    return new Date(year + '/' + month + '/' + day + ' ' + time).getTime();
+  }
+
+  function displayTimeline(id,data) {
+    var width = 450;
+    var chart = d3.timeline()
+    .width(width)
+    .beginning(toUnix('08:00:00'))
+    .ending(toUnix('18:00:00'))
+    .stack().margin({left:60, right:30, top:0, bottom:0}).showTimeAxisTick();
+    d3.select(id).select('svg').remove();
+    var svg = d3.select(id).append('svg').attr('width', width)
+    .datum(data).call(chart);
+  }
+
+  function displayTomorrowTimes() {
+    $.each(inTomorrowDataSet, function(key,val) {
+      var name = val.employee;
+      var start = formatTime(val.times[0].starting_time);
+      var end = formatTime(val.times[0].ending_time);
+      $('#inTomorrow').append('<div id="'+name+'">'+name+' &mdash; </div>');
+      $('#'+name).append(start+'-'+end);
+    });
+  }
+
+  function setTimeBar(current_time) {
+    var time_bar_height = $('#inNow > svg').height();
+    var top = -time_bar_height;
+    $('#currentTime').height(time_bar_height-30);
+
+    var today = new Date();
+    var current_timestamp = today.getTime();
+    var minutes = today.toTimeString(current_timestamp).substring(3,5);
+    var isNumber = $.isNumeric(minutes);
+
+    var move_right = 0;
+
+    if (isNumber && minutes < 15) {
+      move_right = 0;
+    }
+    else if (isNumber && minutes >= 15 && minutes < 30) {
+      move_right = 7.5;
+    }
+    else if (isNumber && minutes >=30 && minutes < 45) {
+      move_right = 15;
+    }
+    else if (isNumber && minutes >= 45) {
+      move_right = 22.5;
+    }
+
+    var left = $('#inNow text:contains('+current_time+')').offset().left-360;
+    $('#currentTime').css('left',left+move_right);
+    $('#currentTime').css('top',top+6);
+    $('#inNow text:contains('+current_time+')').parent().css('fill','rgb(255,0,0)');
+  }
+
+  function addTimelineInfoToArray(array,employee,times,starting_time,ending_time) {
+    var color = '#1f77b4';
+    // add color, start and end times to times object
+    times.push({color, starting_time, ending_time});
+    // add employee, times object to data set array
+    array.push({label: employee, times});
+  }
+
+  function sortTimes(val,employee,times,starting_time,ending_time) {
+    // filter out people who won't be in today
+    if (val.length <= 3) {
+      inTomorrowEmployees.push(employee);
+    }
+    // filter out people who are in now 
+    else if (current_timestamp >= starting_time && current_timestamp < ending_time) {
+      addTimelineInfoToArray(inNowDataSet,employee,times,starting_time,ending_time);
+    } 
+    // filter out people who will be in later
+    else if (current_timestamp < starting_time) {
+      addTimelineInfoToArray(inLaterDataSet,employee,times,starting_time,ending_time);
+    } 
+    // filter out people who were in today but already left
+    else {
+      inTomorrowEmployees.push(employee);
+    }
+  }
+
+  function convertTo24Hour(hour) {
+    switch(hour) {
+      case '1:00': hour = '13:00';
+      break;
+      case '1:30': hour = '13:30';
+      break;
+      case '2:00': hour = '14:00';
+      break;
+      case '2:30': hour = '14:30';
+      break;
+      case '3:00': hour = '15:00';
+      break;
+      case '3:30': hour = '15:30';
+      break;
+      case '4:00': hour = '16:00';
+      break;
+      case '4:30': hour = '16:30';
+      break;
+      case '5:00': hour = '17:00';
+      break;
+      case '5:30': hour = '17:30';
+      break;
+      case '6:00': hour = '18:00';
+      break;
+      default: hour = hour;
+    }
+    return hour;
+  }
+
+  function setCorrectEndTime(end) {
+    if (end !== null) {
+      var half = end.substr(3,1);
+      if (half == '3') {
+        end = (parseInt(end.substr(0,2))+1).toString()+':00';
+      }
+      else if (half == '0') {
+        end = end.substr(0,2)+':30';
+      }
+    }
+    return end;
+  }
+
+  function getFirstName(employee) {
+    var pos = employee.indexOf(' ');
+    if (pos != -1) {
+      employee = employee.substr(0,pos);
+    }
+    return employee;
+  }
+
+  function getTimes(val,starting_time,ending_time) {
+    var a = [];
+    var temp = 0;
+    var signed_in = false;
+    // loop through each person's data
+    $.each(val, function(index, hour) {
+      // ignore name
+      if (index == '0') {
+        return;
+      }
+      hour = convertTo24Hour(hour);
+      // get first start time
+      if (!signed_in){
+        signed_in = true;
+        // convert time to unix milliseconds
+        starting_time = toUnix(hour+':00');
+        a.push({starting_time});
+      }
+      temp = hour;
+    });
+    // get end time(s)
+    var end = setCorrectEndTime(temp);
+    // convert time to unix milliseconds
+    ending_time = toUnix(end+':00');
+    a.push({ending_time});
+    return a;
+  }
+
+  function getTomorrowEmployeeData(data) {
+    var starting_time;
+    var ending_time;
+    // loop through tomorrow's schedule data
+    $.each(data, function(key,val) {
+      // loop through array of employees who have been added to the In Tomorrow section after clocking out
+      $.each(inTomorrowEmployees, function(index,name) {
+        // set employee name
+        var employee = val[0];
+        employee = getFirstName(employee);
+        //compare employee from today and tomorrow data
+        if (employee == name) {
+          var times = [];
+          starting_time = getTimes(val,starting_time,ending_time)[0].starting_time;
+          ending_time = getTimes(val,starting_time,ending_time)[1].ending_time;
+          // filter out people who won't be in tomorrow
+          if (val.length <= 3) {return;}
+          else {
+            times.push({starting_time,ending_time});
+            inTomorrowDataSet.push({employee,times});
+          }
+        }
+      });
+    });
+  }
+
+  function getTodayEmployeeData(data)  {
+    var starting_time;
+    var ending_time;
+    // loop through today's schedule data
+    $.each(data, function(key,val) {
+      // set employee name
+      var employee = val[0];
+      employee = getFirstName(employee);
+      var times = [];
+      starting_time = getTimes(val,starting_time,ending_time)[0].starting_time;
+      ending_time = getTimes(val,starting_time,ending_time)[1].ending_time;
+      sortTimes(val,employee,times,starting_time,ending_time);
+    });
+  }
+
+  function getScheduleData() {
+    $.getJSON('sites/default/shared/code/dashboard-google-sheets/schedule_data.php', function() {
+
+    })
+    .done(function(data) {
+      var today_schedule_data = data[0];
+      var tomorrow_schedule_data = data[1];
+      // console.log(tomorrow_schedule_data);
+      getTodayEmployeeData(today_schedule_data);
+      getTomorrowEmployeeData(tomorrow_schedule_data);
+    })
+    .then(function() {
+      displayTimeline('#inNow', inNowDataSet);
+      displayTimeline('#inLater', inLaterDataSet);
+      displayTomorrowTimes();
+      if (inLaterDataSet.length === 0) {
+        $('#inLater').css('display','none');
+      }
+      if (inNowDataSet.length === 0) {
+        $('#inNow').css('display','none');
+        $('#currentTime').css('display','none');
+      }
+      $('rect').hover(function(e) {
+        var targ;
+        if (!e) e = window.event;
+        if (e.target) targ = e.target;
+        else if (e.srcElement) targ = e.srcElement;
+              if (targ.nodeType == 3) // defeat Safari bug
+                targ = targ.parentNode;
+              var el = (targ.id).substr(12,2);
+              $('#timelineLabel'+el).css('font-weight','bold');
+            },function(e) {
+              var targ;
+              if (!e) e = window.event;
+              if (e.target) targ = e.target;
+              else if (e.srcElement) targ = e.srcElement;
+              if (targ.nodeType == 3) // defeat Safari bug
+                targ = targ.parentNode;
+              var el = targ.id.substr(12,2);
+              $('#timelineLabel'+el).css('font-weight','normal');
+            });
+      $('#1').height($('#inNow').height()+10);
+      var current_time = checkTime(current_timestamp);
+      setTimeBar(current_time);
+      var interval = setInterval(function(){
+        setTimeBar(current_time);
+        if (parseInt($('#currentTime').css('marginLeft')) >= $('#inNow svg').width()-80) {
+          clearInterval(interval);
+          interval = null;
+        }
+      }, 60000);
+      setTimeout(function(){
+        $('#inTomorrow').html('');
+        inNowDataSet = [];
+        inLaterDataSet = [];
+        inTomorrowDataSet = [];
+        inTomorrowEmployees = [];
+        getScheduleData();
+      }, 30000);
+    })
+    .fail(function(d, textStatus, error) {
+      console.error('get schedule data failed, status: ' + textStatus + ', error: ' + error);
+    });
+  }
+  getScheduleData();
+}());
+  
+</script>
